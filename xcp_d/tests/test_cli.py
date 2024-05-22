@@ -349,6 +349,7 @@ def test_nibabies(data_dir, output_dir, working_dir):
         "--head_radius=auto",
         "--smoothing=0",
         "--fd-thresh=0",
+        "--mem-gb=1",
     ]
     _run_and_generate(
         test_name=test_name,

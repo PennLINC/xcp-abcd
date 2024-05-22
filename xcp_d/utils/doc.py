@@ -145,7 +145,6 @@ docdict[
 smoothing : :obj:`float`
     The full width at half maximum (FWHM), in millimeters,
     of the Gaussian smoothing kernel that will be applied to the post-processed and denoised data.
-    ALFF and ReHo outputs will also be smoothing with this kernel.
 """
 
 docdict[

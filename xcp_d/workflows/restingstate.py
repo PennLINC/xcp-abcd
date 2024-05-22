@@ -3,24 +3,19 @@
 """Workflows for calculating resting state-specific metrics."""
 from nipype import Function
 from nipype.interfaces import utility as niu
-from nipype.interfaces.workbench.cifti import CiftiSmooth
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from templateflow.api import get as get_template
 
 from xcp_d import config
 from xcp_d.interfaces.bids import DerivativesDataSink
-from xcp_d.interfaces.nilearn import Smooth
 from xcp_d.interfaces.restingstate import ComputeALFF, ReHoNamePatch, SurfaceReHo
 from xcp_d.interfaces.workbench import (
     CiftiCreateDenseScalar,
     CiftiSeparateMetric,
     CiftiSeparateVolumeAll,
-    FixCiftiIntent,
 )
 from xcp_d.utils.doc import fill_doc
 from xcp_d.utils.plotting import plot_alff_reho_surface, plot_alff_reho_volumetric
-from xcp_d.utils.utils import fwhm2sigma
 
 
 @fill_doc
@@ -61,8 +56,9 @@ def init_alff_wf(
     Inputs
     ------
     denoised_bold
-       This is the ``filtered, interpolated, denoised BOLD``,
-       although interpolation is not necessary if the data were not originally censored.
+       This is the denoised BOLD after optional re-censoring.
+    smoothed_bold
+        Smoothed BOLD after optional re-censoring.
     bold_mask
        bold mask if bold is nifti
     temporal_mask
@@ -118,7 +114,9 @@ series to retain the original scaling.
 """
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["denoised_bold", "bold_mask", "temporal_mask"]),
+        niu.IdentityInterface(
+            fields=["denoised_bold", "smoothed_bold", "bold_mask", "temporal_mask"],
+        ),
         name="inputnode",
     )
     outputnode = pe.Node(
@@ -126,99 +124,33 @@ series to retain the original scaling.
         name="outputnode",
     )
 
-    # compute alff
-    alff_compt = pe.Node(
+    compute_alff = pe.Node(
         ComputeALFF(TR=TR, low_pass=low_pass, high_pass=high_pass),
         mem_gb=mem_gb["resampled"],
-        name="alff_compt",
+        name="compute_alff",
         n_procs=omp_nthreads,
     )
 
-    alff_plot = pe.Node(
+    plot_alff = pe.Node(
         Function(
             input_names=["output_path", "filename", "name_source"],
             output_names=["output_path"],
             function=plot_alff_reho_surface if cifti else plot_alff_reho_volumetric,
         ),
-        name="alff_plot",
+        name="plot_alff",
     )
-    alff_plot.inputs.output_path = "alff.svg"
-    alff_plot.inputs.name_source = name_source
+    plot_alff.inputs.output_path = "alff.svg"
+    plot_alff.inputs.name_source = name_source
 
-    # fmt:off
     workflow.connect([
-        (inputnode, alff_compt, [
+        (inputnode, compute_alff, [
             ("denoised_bold", "in_file"),
             ("bold_mask", "mask"),
             ("temporal_mask", "temporal_mask"),
         ]),
-        (alff_compt, alff_plot, [("alff", "filename")]),
-        (alff_compt, outputnode, [("alff", "alff")])
-    ])
-    # fmt:on
-
-    if smoothing:  # If we want to smooth
-        if not cifti:  # If nifti
-            workflow.__desc__ = workflow.__desc__ + (
-                " The ALFF maps were smoothed with Nilearn using a Gaussian kernel "
-                f"(FWHM={str(smoothing)} mm)."
-            )
-            # Smooth via Nilearn
-            smooth_data = pe.Node(
-                Smooth(fwhm=smoothing),
-                name="niftismoothing",
-                n_procs=omp_nthreads,
-            )
-            # fmt:off
-            workflow.connect([
-                (alff_compt, smooth_data, [("alff", "in_file")]),
-                (smooth_data, outputnode, [("out_file", "smoothed_alff")])
-            ])
-            # fmt:on
-
-        else:  # If cifti
-            workflow.__desc__ = workflow.__desc__ + (
-                " The ALFF maps were smoothed with the Connectome Workbench using a Gaussian "
-                f"kernel (FWHM={str(smoothing)} mm)."
-            )
-
-            # Smooth via Connectome Workbench
-            sigma_lx = fwhm2sigma(smoothing)  # Convert fwhm to standard deviation
-            # Get templates for each hemisphere
-            lh_midthickness = str(
-                get_template("fsLR", hemi="L", suffix="sphere", density="32k")[0]
-            )
-            rh_midthickness = str(
-                get_template("fsLR", hemi="R", suffix="sphere", density="32k")[0]
-            )
-            smooth_data = pe.Node(
-                CiftiSmooth(
-                    sigma_surf=sigma_lx,
-                    sigma_vol=sigma_lx,
-                    direction="COLUMN",
-                    right_surf=rh_midthickness,
-                    left_surf=lh_midthickness,
-                ),
-                name="ciftismoothing",
-                mem_gb=mem_gb["resampled"],
-                n_procs=omp_nthreads,
-            )
-
-            # Always check the intent code in CiftiSmooth's output file
-            fix_cifti_intent = pe.Node(
-                FixCiftiIntent(),
-                name="fix_cifti_intent",
-                mem_gb=mem_gb["resampled"],
-                n_procs=omp_nthreads,
-            )
-
-            # fmt:off
-            workflow.connect([
-                (alff_compt, smooth_data, [("alff", "in_file")]),
-                (smooth_data, fix_cifti_intent, [("out_file", "in_file")]),
-                (fix_cifti_intent, outputnode, [("out_file", "smoothed_alff")]),
-            ])
-            # fmt:on
+        (compute_alff, plot_alff, [("alff", "filename")]),
+        (compute_alff, outputnode, [("alff", "alff")])
+    ])  # fmt:skip
 
     ds_alff_plot = pe.Node(
         DerivativesDataSink(
@@ -230,10 +162,52 @@ series to retain the original scaling.
         name="ds_alff_plot",
         run_without_submitting=False,
     )
+    workflow.connect([(plot_alff, ds_alff_plot, [("output_path", "in_file")])])
 
-    # fmt:off
-    workflow.connect([(alff_plot, ds_alff_plot, [("output_path", "in_file")])])
-    # fmt:on
+    if smoothing:
+        workflow.__desc__ += " ALFF was also calculated from the smoothed, denoised BOLD data."
+
+        compute_smoothed_alff = pe.Node(
+            ComputeALFF(TR=TR, low_pass=low_pass, high_pass=high_pass),
+            mem_gb=mem_gb["resampled"],
+            name="compute_smoothed_alff",
+            n_procs=omp_nthreads,
+        )
+
+        plot_smoothed_alff = pe.Node(
+            Function(
+                input_names=["output_path", "filename", "name_source"],
+                output_names=["output_path"],
+                function=plot_alff_reho_surface if cifti else plot_alff_reho_volumetric,
+            ),
+            name="plot_smoothed_alff",
+        )
+        plot_smoothed_alff.inputs.output_path = "alff.svg"
+        plot_smoothed_alff.inputs.name_source = name_source
+
+        workflow.connect([
+            (inputnode, compute_smoothed_alff, [
+                ("denoised_bold", "in_file"),
+                ("bold_mask", "mask"),
+                ("temporal_mask", "temporal_mask"),
+            ]),
+            (compute_smoothed_alff, plot_smoothed_alff, [("alff", "filename")]),
+            (compute_smoothed_alff, outputnode, [("alff", "smoothed_alff")])
+        ])  # fmt:skip
+
+        ds_smoothed_alff_plot = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                source_file=name_source,
+                desc="alffSmoothedSurfacePlot" if cifti else "alffSmoothedVolumetricPlot",
+                datatype="figures",
+            ),
+            name="ds_smoothed_alff_plot",
+            run_without_submitting=False,
+        )
+        workflow.connect([
+            (plot_smoothed_alff, ds_smoothed_alff_plot, [("output_path", "in_file")]),
+        ])  # fmt:skip
 
     return workflow
 
