@@ -89,14 +89,14 @@ class ExecutiveSummary(object):
         ANAT_REGISTRATION_DESCS = [
             "AtlasOnAnat",
             "AnatOnAtlas",
-            # "AtlasOnSubcorticals",
-            # "SubcorticalsOnAtlas",
+            "AtlasOnSubcorticals",
+            "SubcorticalsOnAtlas",
         ]
         ANAT_REGISTRATION_TITLES = [
             "Atlas On {modality}",  # noqa: FS003
             "{modality} On Atlas",  # noqa: FS003
-            # "Atlas On {modality} Subcorticals",  # noqa: FS003
-            # "{modality} Subcorticals On Atlas",  # noqa: FS003
+            "Atlas On {modality} Subcorticals",  # noqa: FS003
+            "{modality} Subcorticals On Atlas",  # noqa: FS003
         ]
         TASK_REGISTRATION_DESCS = [
             "TaskOnT1w",

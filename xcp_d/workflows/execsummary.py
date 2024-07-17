@@ -521,6 +521,7 @@ def init_execsummary_functional_plots_wf(
 
 @fill_doc
 def init_execsummary_anatomical_plots_wf(
+    input_type,
     t1w_available,
     t2w_available,
     name="execsummary_anatomical_plots_wf",
@@ -538,12 +539,14 @@ def init_execsummary_anatomical_plots_wf(
 
             with mock_config():
                 wf = init_execsummary_anatomical_plots_wf(
+                    input_type="nibabies",
                     t1w_available=True,
                     t2w_available=True,
                 )
 
     Parameters
     ----------
+    %(input_type)s
     t1w_available : bool
         Generally True.
     t2w_available : bool
@@ -559,6 +562,8 @@ def init_execsummary_anatomical_plots_wf(
     template
     """
     workflow = Workflow(name=name)
+
+    output_dir = config.execution.xcp_d_dir
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -621,8 +626,45 @@ def init_execsummary_anatomical_plots_wf(
         ])
         # fmt:on
 
-    # TODO: Add subcortical overlay images as well.
-    # 1. Binarize atlas.
+        # Add subcortical overlay images as well.
+        if input_type == "nibabies":
+            # 1. TODO: Binarize atlas.
+
+            plot_subcort_on_atlas_wf = init_plot_custom_slices_wf(
+                output_dir=output_dir,
+                desc="SubcorticalsOnAtlas",
+                name="plot_subcort_on_atlas_wf",
+            )
+
+            # fmt:off
+            workflow.connect([
+                (inputnode, plot_subcort_on_atlas_wf, [
+                    (anat, "inputnode.name_source"),
+                    ("template", "inputnode.overlay_file"),
+                ]),
+                (resample_anat, plot_subcort_on_atlas_wf, [
+                    ("out_file", "inputnode.underlay_file"),
+                ]),
+            ])
+            # fmt:on
+
+            plot_atlas_on_subcort_wf = init_plot_custom_slices_wf(
+                output_dir=output_dir,
+                desc="AtlasOnSubcorticals",
+                name="plot_atlas_on_subcort_wf",
+            )
+
+            # fmt:off
+            workflow.connect([
+                (inputnode, plot_atlas_on_subcort_wf, [
+                    (anat, "inputnode.name_source"),
+                    ("template", "inputnode.underlay_file"),
+                ]),
+                (resample_anat, plot_atlas_on_subcort_wf, [
+                    ("out_file", "inputnode.overlay_file"),
+                ]),
+            ])
+            # fmt:on
 
     return workflow
 
@@ -635,8 +677,7 @@ def init_plot_custom_slices_wf(
 ):
     """Plot a custom selection of slices with Slicer.
 
-    This workflow is used to produce subcortical registration plots specifically for
-    infant data.
+    This workflow is used to produce subcortical registration plots specifically for infant data.
 
     Workflow Graph
         .. workflow::
@@ -664,6 +705,21 @@ def init_plot_custom_slices_wf(
     underlay_file
     overlay_file
     name_source
+
+    Notes
+    -----
+    1.  Grab sub2atl_ROI.2.nii.gz from DCAN infant pipeline derivatives.
+        -   TODO: Find the equivalent file from nibabies.
+    2.  Grab Atlas_ROIs.2.nii.gz from DCAN infant pipeline derivatives.
+        -   TODO: Find the equivalent file from nibabies.
+    3.  Binarize Atlas_ROIs.2.nii.gz.
+    4.  Use slicer to overlay sub2atl_ROI.2.nii.gz onto the binarized Atlas_ROIs.2.nii.gz for
+        3 x slices, 3 y slices, and 3 z slices.
+    5.  Combine the 9 slice images into a single gif with pngappend.
+    6.  Binarize sub2atl_ROI.2.nii.gz.
+    7.  Use slicer to overlay Atlas_ROIs.2.nii.gz onto the binarized sub2atl_ROI.2.nii.gz for
+        3 x slices, 3 y slices, and 3 z slices.
+    8.  Combine the 9 slice images into a single gif with pngappend.
     """
     # NOTE: These slices are almost certainly specific to a given MNI template and resolution.
     SINGLE_SLICES = ["x", "x", "x", "y", "y", "y", "z", "z", "z"]
