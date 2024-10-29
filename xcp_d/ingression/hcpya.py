@@ -23,6 +23,7 @@ from xcp_d.ingression.utils import (
     copy_files_in_dict,
     plot_bbreg,
     write_json,
+    make_masks,
 )
 from xcp_d.utils.filemanip import ensure_list
 
@@ -133,6 +134,8 @@ def convert_hcp_to_bids_single_subject(in_dir, out_dir, sub_ent):
         sub-<sub_id>
             └── files
                 └── MNINonLinear
+                    ├── ROIs
+                        ├── wmparc.2.nii.gz # 2 is the roi resolution 2 mm, this will be used for making the subject-specific masks
                     ├── Results
                     │   ├── *_<TASK_ID><RUN_ID>_<DIR_ID>
                     │   │   ├── SBRef_dc.nii.gz
@@ -162,6 +165,7 @@ def convert_hcp_to_bids_single_subject(in_dir, out_dir, sub_ent):
                     ├── aparc+aseg.nii.gz
                     ├── brainmask_fs.nii.gz
                     └── ribbon.nii.gz
+                    
     """
     assert isinstance(in_dir, str)
     assert os.path.isdir(in_dir), f"Folder DNE: {in_dir}"
@@ -179,6 +183,7 @@ def convert_hcp_to_bids_single_subject(in_dir, out_dir, sub_ent):
 
     anat_dir_orig = os.path.join(in_dir, sub_id, "MNINonLinear")
     func_dir_orig = os.path.join(anat_dir_orig, "Results")
+    ROI_dir_orig = os.path.join(anat_dir_orig,"ROIs")
     subject_dir_bids = os.path.join(out_dir, sub_ent)
     anat_dir_bids = os.path.join(subject_dir_bids, "anat")
     func_dir_bids = os.path.join(subject_dir_bids, "func")
@@ -194,9 +199,12 @@ def convert_hcp_to_bids_single_subject(in_dir, out_dir, sub_ent):
     os.makedirs(func_dir_bids, exist_ok=True)
     os.makedirs(work_dir, exist_ok=True)
 
+    segmentation = os.path.join(anat_dir_orig, "wmparc.2.nii.gz")
+    
+    make_masks(segmentation,os.path.join(anat_dir_bids,f"wm_2mm_{sub_id}_mask_eroded.nii.gz"),os.path.join(anat_dir_bids,f"vent_2mm_{sub_id}_mask_eroded.nii.gz"),fmri_res=2,roi_res=2)
     # Get masks to be used to extract confounds
-    csf_mask = str(load_data(f"masks/{volspace_ent}_{RES_ENT}_label-CSF_mask.nii.gz"))
-    wm_mask = str(load_data(f"masks/{volspace_ent}_{RES_ENT}_label-WM_mask.nii.gz"))
+    csf_mask = str(load_data(os.path.join(anat_dir_bids,f"vent_2mm_{sub_id}_mask_eroded.nii.gz")))
+    wm_mask = str(load_data(os.path.join(anat_dir_bids,f"wm_2mm_{sub_id}_mask_eroded.nii.gz")))
 
     # A dictionary of mappings from HCP derivatives to fMRIPrep derivatives.
     # Values will be lists, to allow one-to-many mappings.

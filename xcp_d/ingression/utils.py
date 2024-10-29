@@ -396,3 +396,67 @@ def write_json(data, outfile):
         json.dump(data, f, sort_keys=True, indent=4)
 
     return outfile
+
+def make_masks(segmentation, wm_mask_out, vent_mask_out, **kwargs):
+
+    """
+    # make eroded white matter and ventricular masks copied from DCAN-bold-processing
+    generates ventricular and white matter masks from a Desikan/FreeSurfer
+    segmentation file.  label constraints may be overridden.
+    :param segmentation: Desikan/FreeSurfer spec segmentation nifti file. [e.g. 'wmparc.%g.nii.gz' % roi_res]
+    Does not need to be a cifti but must have labels according to FS lookup
+    table, including cortical parcellations.
+    :param wm_mask_out: binary white matter mask. [e.g. ‘wm_%gmm_%s_mask_eroded.nii.gz’%(fmri_res, subject)] 
+    :param vent_mask_out: binary ventricular mask. [e.g. ‘vent_%gmm_%s_mask_eroded.nii.gz’%(fmri_res, subject)]
+    :param kwargs: dictionary of label value overrides.  You may override
+    default label number bounds for white matter and ventricle masks in the
+    segmentation file.
+    :return: None
+    """
+
+    wd = os.path.dirname(wm_mask_out)
+    # set parameter defaults
+    defaults = dict(wm_lt_R=2950, wm_ut_R=3050, wm_lt_L=3950, wm_ut_L=4050,
+                    vent_lt_R=43, vent_ut_R=43, vent_lt_L=4, vent_ut_L=4,
+                    roi_res=2)
+    # set temporary filenames
+    tempfiles = {
+        'wm_mask_L': os.path.join(wd, 'tmp_left_wm.nii.gz'),
+        'wm_mask_R': os.path.join(wd, 'tmp_right_wm.nii.gz'),
+        'vent_mask_L': os.path.join(wd, 'tmp_left_vent.nii.gz'),
+        'vent_mask_R': os.path.join(wd, 'tmp_right_vent.nii.gz'),
+        'wm_mask': os.path.join(wd, 'tmp_wm.nii.gz'),
+        'vent_mask': os.path.join(wd, 'tmp_vent.nii.gz')
+    }
+    # inputs and outputs
+    iofiles = {
+        'segmentation': segmentation,
+        'wm_mask_out': wm_mask_out,
+        'vent_mask_out': vent_mask_out
+    }
+    # command pipeline
+    cmdlist = [
+        'fslmaths {segmentation} -thr {wm_lt_R} -uthr {wm_ut_R} {wm_mask_R}',
+        'fslmaths {segmentation} -thr {wm_lt_L} -uthr {wm_ut_L} {wm_mask_L}',
+        'fslmaths {wm_mask_R} -add {wm_mask_L} -bin {wm_mask}',
+        'fslmaths {wm_mask} -kernel gauss {roi_res:g} -ero {wm_mask_out}',
+        'fslmaths {segmentation} -thr {vent_lt_R} -uthr {vent_ut_R} '
+        '{vent_mask_R}',
+        'fslmaths {segmentation} -thr {vent_lt_L} -uthr {vent_ut_L} '
+        '{vent_mask_L}',
+        'fslmaths {vent_mask_R} -add {vent_mask_L} -bin {vent_mask}',
+        'fslmaths {vent_mask} -kernel gauss {roi_res:g} -ero {vent_mask_out}'
+    ]
+
+    # get params
+    defaults.update(kwargs)
+    kwargs.update(defaults)
+    kwargs.update(iofiles)
+    kwargs.update(tempfiles)
+    # format and run commands
+    for cmdfmt in cmdlist:
+        cmd = cmdfmt.format(**kwargs)
+        subprocess.call(cmd.split())
+    # cleanup
+    for key in tempfiles.keys():
+        os.remove(tempfiles[key])
