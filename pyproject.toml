@@ -40,7 +40,7 @@ dependencies = [
     "pybids ~= 0.18.1",
     "pyyaml",
     "scikit-learn <= 1.6.0",
-    "scipy >= 1.14.0,<= 1.15.0",  # nipype needs networkx, which needs scipy > 1.8.0
+    "scipy >= 1.14.0,<= 1.15.1",  # nipype needs networkx, which needs scipy > 1.8.0
     "seaborn",  # for plots
     "sentry-sdk ~= 2.19.0",  # for usage reports
     "templateflow ~= 24.2.0",
