@@ -70,7 +70,7 @@ doc = [
     "svgutils",
 ]
 dev = [
-    "ruff ~= 0.8.0",
+    "ruff ~= 0.9.1",
     "pre-commit",
 ]
 tests = [
