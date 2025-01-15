@@ -173,10 +173,6 @@ def flag_bad_run(
     post_scrubbing_duration : :obj:`float`
         Amount of time remaining in the run after dummy scan removal, in seconds.
     """
-    if fd_thresh <= 0:
-        # No scrubbing will be performed, so there's no point is calculating amount of "good time".
-        return np.inf
-
     dummy_scans = _infer_dummy_scans(
         dummy_scans=dummy_scans,
         confounds_file=motion_file,
@@ -188,27 +184,73 @@ def flag_bad_run(
     # Remove dummy volumes
     fmriprep_confounds_df = fmriprep_confounds_df.drop(np.arange(dummy_scans))
 
-    # Calculate filtered FD
-    band_stop_min_adjusted, band_stop_max_adjusted, _ = _modify_motion_filter(
-        motion_filter_type=motion_filter_type,
-        band_stop_min=band_stop_min,
-        band_stop_max=band_stop_max,
-        TR=TR,
-    )
-    motion_df = load_motion(
-        fmriprep_confounds_df,
-        TR=TR,
-        motion_filter_type=motion_filter_type,
-        motion_filter_order=motion_filter_order,
-        band_stop_min=band_stop_min_adjusted,
-        band_stop_max=band_stop_max_adjusted,
-    )
-    fd_arr = compute_fd(
-        confound=motion_df,
-        head_radius=head_radius,
-        filtered=bool(motion_filter_type),
-    )
-    return np.sum(fd_arr <= fd_thresh) * TR
+    retained_sec = np.inf
+    if fd_thresh > 0:
+        # Calculate filtered FD
+        band_stop_min_adjusted, band_stop_max_adjusted, _ = _modify_motion_filter(
+            motion_filter_type=motion_filter_type,
+            band_stop_min=band_stop_min,
+            band_stop_max=band_stop_max,
+            TR=TR,
+        )
+        motion_df = load_motion(
+            fmriprep_confounds_df,
+            TR=TR,
+            motion_filter_type=motion_filter_type,
+            motion_filter_order=motion_filter_order,
+            band_stop_min=band_stop_min_adjusted,
+            band_stop_max=band_stop_max_adjusted,
+        )
+        fd_arr = compute_fd(
+            confound=motion_df,
+            head_radius=head_radius,
+            filtered=bool(motion_filter_type),
+        )
+        retained_sec = np.sum(fd_arr <= fd_thresh) * TR
+
+    return retained_sec
+
+
+def calculate_dof(n_volumes, t_r, high_pass=0, low_pass=np.inf):
+    """Calculate the number of degrees of freedom lost by a temporal filter.
+
+    Parameters
+    ----------
+    n_volumes : int
+        Number of data points in the time series.
+    t_r : float
+        Repetition time of the time series, in seconds.
+    high_pass : float
+        High-pass frequency in Hertz. Default is 0 (no high-pass filter).
+    low_pass : float or numpy.inf
+        Low-pass frequency in Hertz. Default is np.inf (no low-pass filter).
+
+    Returns
+    -------
+    dof_lost : int
+        Number of degrees of freedom lost by applying the filter.
+
+    Notes
+    -----
+    Both Caballero-Gaudes & Reynolds (2017) and Reynolds et al. (preprint)
+    say that each frequency removed drops two degrees of freedom.
+    """
+    import numpy as np
+
+    duration = t_r * n_volumes
+    fs = 1 / t_r
+    nyq = 0.5 * fs
+    spacing = 1 / duration
+    n_freqs = int(np.ceil(nyq / spacing))
+    frequencies_hz = np.linspace(0, nyq, n_freqs)
+
+    # Figure out what the change in DOF is from the bandpass filter
+    dropped_freqs_idx = np.where((frequencies_hz < high_pass) | (frequencies_hz > low_pass))[0]
+    n_dropped_freqs = dropped_freqs_idx.size
+
+    # Calculate the lost degrees of freedom
+    dof_lost = n_dropped_freqs * 2
+    return dof_lost
 
 
 def calculate_exact_scans(exact_times, scan_length, t_r, bold_file):

@@ -435,6 +435,7 @@ The default is 240 (4 minutes).
     )
     g_censor.add_argument(
         '--output-type',
+        '--output_type',
         dest='output_type',
         default='auto',
         action='store',

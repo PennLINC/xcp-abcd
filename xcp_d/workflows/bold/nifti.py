@@ -324,6 +324,7 @@ the following post-processing was performed.
             ('outputnode.preprocessed_bold', 'inputnode.preprocessed_bold'),
             ('outputnode.dummy_scans', 'inputnode.dummy_scans'),
             ('outputnode.motion_file', 'inputnode.motion_file'),
+            ('outputnode.confounds_tsv', 'inputnode.design_matrix'),
             ('outputnode.temporal_mask', 'inputnode.temporal_mask'),
         ]),
         (denoise_bold_wf, qc_report_wf, [

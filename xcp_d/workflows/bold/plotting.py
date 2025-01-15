@@ -77,6 +77,7 @@ def init_qc_report_wf(
         Only used with non-CIFTI data.
     %(dummy_scans)s
     motion_file
+    design_matrix
     %(temporal_mask)s
 
     Outputs
@@ -94,6 +95,7 @@ def init_qc_report_wf(
                 'censored_denoised_bold',
                 'dummy_scans',
                 'motion_file',
+                'design_matrix',
                 'temporal_mask',
                 'run_index',  # will only be set for concatenated data
                 # nifti-only inputs
@@ -260,6 +262,8 @@ def init_qc_report_wf(
                 TR=TR,
                 head_radius=head_radius,
                 template_mask=nlin2009casym_brain_mask,
+                high_pass=config.workflow.high_pass,
+                low_pass=config.workflow.low_pass,
             ),
             name='make_linc_qc',
             mem_gb=2,
@@ -270,6 +274,7 @@ def init_qc_report_wf(
                 ('preprocessed_bold', 'bold_file'),
                 ('censored_denoised_bold', 'cleaned_file'),
                 ('motion_file', 'motion_file'),
+                ('design_matrix', 'design_matrix'),
                 ('temporal_mask', 'temporal_mask'),
                 ('dummy_scans', 'dummy_scans'),
             ]),

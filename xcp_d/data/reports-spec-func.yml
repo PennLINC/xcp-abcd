@@ -16,7 +16,12 @@ sections:
               and outlier volumes are identified.
     subtitle: Framewise Displacement and Censored Volumes
   - bids: {datatype: figures, suffix: design}
-    caption:  The "design matrix" represents the confounds that are used to denoise the BOLD data.
+    caption: |
+      The "design matrix" represents the confounds that are used to denoise the BOLD data.
+
+      Please note that the outlier columns are somewhat misleading,
+      as volumes are removed by censoring, rather than regression.
+      This figure does not include the intercept or linear trend that are removed in the denoising step.
     subtitle: Design Matrix for Confound Regression
     style:
       height: 100px

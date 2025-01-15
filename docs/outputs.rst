@@ -242,11 +242,13 @@ Functional timeseries and connectivity matrices
 This includes the atlases used to extract the timeseries.
 
 .. important::
+
    If ``abcd`` or ``hbcd`` mode is used, the time series will be interpolated.
    If ``linc`` mode is used, the time series will be censored.
    In both cases, the correlation matrices will be calculated using the censored time series.
 
 .. important::
+
    Correlation matrices with the ``desc-<INT>volumes`` entity are produced if the
    ``--create-matrices`` parameter is used with integer values.
 
@@ -334,17 +336,37 @@ The "framewise_displacement" column contains zeros for low-motion volumes, and o
 high-motion outliers.
 This file includes the high-motion volumes that are removed in most other derivatives.
 
-``design.tsv`` is a tab-delimited file with one column for each nuisance regressor,
-including one-hot encoded regressors indicating each of the high-motion outlier volumes.
-This file includes the high-motion volumes that are removed in most other derivatives.
+``design.tsv`` is a tab-delimited file with one column for each nuisance regressor.
+This file includes rows for the high-motion volumes that are removed in most other derivatives.
+It does not indicate which volumes are removed (please see the ``outliers.tsv`` for that)
+and also does not include the intercept or linear trend terms that are separately applied before
+the GLM regression.
+
+``_desc-linc_qc.tsv`` is a tab-delimited file with one row and one column for each of several QC
+metrics. The QC metrics are described in detail in the ``desc-linc_qc.json`` file.
+This file includes metrics indicating the number of volumes removed due to high motion,
+the number of confounds used in the denoising step
+(including two for the linear trend and intercept),
+and the number of degrees of freedom lost by temporal filtering.
+
+In order to determine the degrees of freedom for the resulting correlations,
+you should do the following calculation:
+``num_retained_volumes - (num_dof_used_by_denoising + num_dof_used_by_filter + 2)``.
 
 .. important::
-   Please note that the outlier columns are somewhat misleading,
-   as volumes are removed by censoring, rather than regression.
+
+   This formula ignores autocorrelation.
+   In order to calculate the effective degrees of freedom for your correlation coefficients,
+   consider using a tool like xDF.
+
+.. warning::
+
+   This formula must be adjusted for correlations computed from random subsets of the time series
+   (i.e., by using the ``--create-matrices`` parameter with integer values).
 
 
-DCAN style scrubbing file (if ``--skip-dcan-qc`` is not used)
-=============================================================
+DCAN style scrubbing file (if ``--abcc-qc`` is not used)
+========================================================
 
 This file is in hdf5 format (readable by h5py), and contains binary scrubbing masks from 0.0
 to 1mm FD in 0.01 steps.

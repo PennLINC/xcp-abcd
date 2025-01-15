@@ -803,9 +803,6 @@ to satisfy DCAN-specific tools.
    regressors, this could lead to the imperfect removal of noise from your BOLD data.
 
 The residuals from the second step are referred to as the ``denoised, interpolated BOLD``.
-The ``denoised, interpolated BOLD`` will only be written out to the output
-directory if the ``--skip-dcan-qc`` flag is not used,
-as users **should not** use interpolated data directly.
 
 
 Re-censoring
@@ -820,6 +817,8 @@ After bandpass filtering, high motion volumes are removed from the
    In ``linc`` mode, the re-censored BOLD data are the primary output.
    In the ``abcd`` and ``hbcd`` modes,
    the denoised, **interpolated** BOLD data are the primary output.
+
+   This behavior is specifically controlled with the ``--output-type`` flag.
 
 
 Resting-state derivative generation
